@@ -1,5 +1,12 @@
 {
     "name": "HeadPatrolSkill",
     "skillID": "HeadPatrolSkill",
-    "version": "1.0.0"
+    "author": "HEXAnder",
+    "version": "1.0.0",
+    "remote": {
+    	"orientation": "landscape"
+    },
+    "devicesPermission": [
+    	
+    ]
 }
