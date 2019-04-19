@@ -3,23 +3,27 @@ package HeadPatrolSkill
 import (
 	"mind/core/framework/drivers/distance"
 	"mind/core/framework/drivers/hexabody"
-	//	"mind/core/framework/log"
+	"mind/core/framework/log"
 	"mind/core/framework/skill"
 	"time"
+	"strconv"
+	"encoding/json"
 )
 
 const (
-	HEAD_ALIGN_SPEED  = 1000 // ms to make initial head alignment
-	HEAD_SCAN         = 40   // degrees to scan (centered on walking direction; spins if > 180; still if < 10)
-	HEAD_SCAN_SPEED   = 40.0 // degress/s (>10 for smooth movement)
+	HEAD_ALIGN_SPEED  = 2000 // ms to make initial head alignment
+	HEAD_SCAN_SPEED   = 20.0 // degress/s (>10 for smooth movement)
 	REACTION_INTERVAL = 2000 // ms frequecy of reaction
 	REACTION_DISTANCE = 200  // mm distance to react to (range: 100-1500)
 )
 
 type HeadPatrolSkill struct {
 	skill.Base
-	currentScanDirection hexabody.RotationDirection
+	currentScanRotation hexabody.RotationDirection
+	currentWalkDirection float64
 	isRunning            bool
+//	headScanSpeed		 float64
+	headScanRange		 float64
 }
 
 func NewSkill() skill.Interface {
@@ -29,39 +33,39 @@ func NewSkill() skill.Interface {
 
 /**
 *	Checks current head direction relative to walking direction with knowledge of current rotational direction
-* 	to decide whether or not to change the direction of head rotation. Regardless of provided HEAD_SCAN value
+* 	to decide whether or not to change the direction rotation. Regardless of provided d.headScanRange value
 *	this function only works with values between 10 and 180 degrees. There is no head motion when less than 10
 * 	and there is full, continuous rotation with greater than 180.
  */
-func changeHeadDirection(headDirection float64, walkingDirection float64, currentScanDirection hexabody.RotationDirection) bool {
-	var validHeadScan float64 = HEAD_SCAN
+func changeHeadRotation(headDirection float64, d *HeadPatrolSkill) bool {
+	var validHeadScanRange float64 = d.headScanRange
 	switch { // normalized to accepted range
-	case HEAD_SCAN < 10:
-		validHeadScan = 10
-	case HEAD_SCAN > 180:
-		validHeadScan = 180
+	case d.headScanRange < 10:
+		validHeadScanRange = 10
+	case d.headScanRange > 180:
+		validHeadScanRange = 180
 	}
 
 	validHeadDirection := headDirection
-	switch { //normalize to walkingDirection
-	case headDirection < walkingDirection-validHeadScan/2-90:
+	switch { //normalize to d.currentWalkDirection
+	case headDirection < d.currentWalkDirection-validHeadScanRange/2-90:
 		validHeadDirection = headDirection + 360
-	case headDirection > walkingDirection+validHeadScan/2+90:
+	case headDirection > d.currentWalkDirection+validHeadScanRange/2+90:
 		validHeadDirection = headDirection - 360
 	}
 
 	var check float64
-	var changeDir bool
-	switch currentScanDirection {
+	var changeRotation bool
+	switch d.currentScanRotation {
 	case -1:
-		check = walkingDirection - validHeadScan/2
-		changeDir = validHeadDirection < check
+		check = d.currentWalkDirection - validHeadScanRange/2
+		changeRotation = validHeadDirection < check
 	case 1:
-		check = walkingDirection + validHeadScan/2
-		changeDir = validHeadDirection > check
+		check = d.currentWalkDirection + validHeadScanRange/2
+		changeRotation = validHeadDirection > check
 	}
 	//	log.Info.Println("Head Check: ", check,"|",validHeadDirection," :: ",headDirection)
-	return changeDir
+	return changeRotation
 }
 
 func (d *HeadPatrolSkill) OnStart() {
@@ -76,18 +80,18 @@ func (d *HeadPatrolSkill) OnClose() {
 }
 
 func (d *HeadPatrolSkill) OnConnect() {
-	walkingDirection := 0.0
-	var currentScanDirection hexabody.RotationDirection = 1
-	hexabody.MoveHead(walkingDirection, HEAD_ALIGN_SPEED)
+	d.currentWalkDirection = 0.0
+	d.headScanRange = 30.0
+	d.isRunning = true
+	d.currentScanRotation = 1
+	hexabody.MoveHead(d.currentWalkDirection, HEAD_ALIGN_SPEED)
 	for {
 		var checkInterval time.Duration
-		if d.isRunning {
+		if d.isRunning && d.headScanRange >= 10 {
+			hexabody.RotateHeadContinuously(d.currentScanRotation, HEAD_SCAN_SPEED)
 			headDirection := hexabody.Direction()
-			if HEAD_SCAN <= 180 && changeHeadDirection(headDirection, walkingDirection, currentScanDirection) {
-				currentScanDirection = currentScanDirection * -1
-			}
-			if HEAD_SCAN >= 10 {
-				hexabody.RotateHeadContinuously(currentScanDirection, HEAD_SCAN_SPEED)
+			if d.headScanRange <= 180 && changeHeadRotation(headDirection, d) {
+				d.currentScanRotation = d.currentScanRotation * -1
 			}
 			dist, _ := distance.Value()
 			//		log.Info.Println("Distance in mm: ", dist, " :: ", err)
@@ -95,8 +99,8 @@ func (d *HeadPatrolSkill) OnConnect() {
 				hexabody.StopRotatingHeadContinuously()
 				time.Sleep(REACTION_INTERVAL * time.Millisecond)
 			}
-			var headRatio = HEAD_SCAN / HEAD_SCAN_SPEED
-			var toleranceInterval time.Duration = 100 * time.Duration(headRatio) //10% of HEAD_SCAN
+			var headRatio = d.headScanRange / HEAD_SCAN_SPEED
+			var toleranceInterval time.Duration = 100 * time.Duration(headRatio) //10% of d.headScanRange
 			switch {                                                             // determine ideal check interval within bounds
 			case toleranceInterval > 1000:
 				checkInterval = 1000
@@ -106,6 +110,7 @@ func (d *HeadPatrolSkill) OnConnect() {
 				checkInterval = toleranceInterval
 			}
 		} else {
+			hexabody.MoveHead(d.currentWalkDirection, HEAD_ALIGN_SPEED)
 			hexabody.StopRotatingHeadContinuously()
 		}
 		time.Sleep(checkInterval * time.Millisecond)
@@ -113,20 +118,52 @@ func (d *HeadPatrolSkill) OnConnect() {
 }
 
 func (d *HeadPatrolSkill) OnDisconnect() {
-	// Use this method to do something when the remote disconnected.
 	hexabody.Relax()
 }
 
 func (d *HeadPatrolSkill) OnRecvJSON(data []byte) {
-	// Use this method to do something when skill receive json data from remote client.
-}
+	var dat map[string]interface{}
+	if err := json.Unmarshal(data, &dat); err != nil {
+		panic(err)
+	}
+//	log.Info.Println("Data byte to string: ",dat)
+	run := dat["run"]
+	hsr := -1.0
+	switch dat["hsr"].(type) {
+		case string:
+			hsr, _ = strconv.ParseFloat(dat["hsr"].(string), 64)
+		default: //nil
+	}
 
-func (d *HeadPatrolSkill) OnRecvString(data string) {
-	// Use this method to do something when skill receive string from remote client.
-	switch data {
+	switch run {
 	case "start":
+		hexabody.MoveHead(d.currentWalkDirection, HEAD_ALIGN_SPEED)
 		d.isRunning = true
+		log.Info.Println("Starting head scan")
 	case "stop":
 		d.isRunning = false
+		hexabody.MoveHead(d.currentWalkDirection, HEAD_ALIGN_SPEED)
+		log.Info.Println("Stopping head scan")
+	default: //nil or invalid
 	}
+
+	switch {
+	case hsr >= 10 && hsr <= 180:
+		d.headScanRange = hsr
+		log.Info.Println("Changing head scan range to ", hsr)
+	case hsr < 10:
+		hexabody.MoveHead(d.currentWalkDirection, HEAD_ALIGN_SPEED)
+		d.headScanRange = hsr
+		log.Info.Println("Staring straight ahead")
+	case hsr > 180:
+		d.headScanRange = hsr
+		log.Info.Println("Scanning in all directions")
+	default: //nil or invalid
+	}
+
+}
+
+
+func (d *HeadPatrolSkill) OnRecvString(data string) {
+	log.Info.Println("Unrecognized data string received: ", data)
 }
