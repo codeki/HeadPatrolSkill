@@ -68,7 +68,7 @@ func changeHeadRotation(headDirection float64, d *HeadPatrolSkill) bool {
 	return changeRotation
 }
 
-func receivePower() {
+func powerBow() {
 	hexabody.RelaxHead()
 	hexabody.Stand()
 
@@ -180,7 +180,7 @@ func (d *HeadPatrolSkill) OnRecvJSON(data []byte) {
 	case "power":
 		d.isRunning = false
 		hexabody.MoveHead(d.currentWalkDirection, HEAD_ALIGN_SPEED)
-		receivePower()
+		powerBow()
 		log.Info.Println("Stopping head scan and ready to receive power")
 	default: //nil or invalid
 	}
