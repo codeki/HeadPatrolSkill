@@ -23,6 +23,12 @@
 						data: {"run":"stop"}
 					})
 				}
+				document.getElementById("power").onclick = function() {
+					robot.sendData({
+						skillID: skillID, 
+						data: {"run":"power"}
+					})
+				}
 				document.getElementById("slider").onmouseup = function() {
 					var val = document.getElementById("slider").value;
 					robot.sendData({
@@ -73,6 +79,8 @@
 			ontouchend="callfunction()"> 
 		  <br />Head scan range: <span id="val"></span> 
 		</div> 
+		<p>
+		<button id="power">Power Bow</button>
 	
 	<script> 
 	var rangeslider = document.getElementById("slider"); 

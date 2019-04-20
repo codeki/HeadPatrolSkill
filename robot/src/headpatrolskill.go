@@ -68,6 +68,36 @@ func changeHeadRotation(headDirection float64, d *HeadPatrolSkill) bool {
 	return changeRotation
 }
 
+func receivePower() {
+	hexabody.RelaxHead()
+	hexabody.Stand()
+
+	// Same as Toe Position (A,R,H) in simulator, except A ranges -90 to 90	
+	var allLegPositions = hexabody.NewLegPositions()
+	allLegPositions.SetLegPosition(0, hexabody.NewLegPosition().SetCoordinates(55, 170, -20))
+	allLegPositions.SetLegPosition(1, hexabody.NewLegPosition().SetCoordinates(-55, 170, -20))
+	allLegPositions.SetLegPosition(2, hexabody.NewLegPosition().SetCoordinates(0, 120, 80))
+	allLegPositions.SetLegPosition(3, hexabody.NewLegPosition().SetCoordinates(-30, 60, 130))
+	allLegPositions.SetLegPosition(4, hexabody.NewLegPosition().SetCoordinates(30, 60, 130))
+	allLegPositions.SetLegPosition(5, hexabody.NewLegPosition().SetCoordinates(0, 120, 80))
+	legPositionGo(allLegPositions)
+}
+
+func legPositionGo (lps hexabody.LegPositions) {
+	// Check and fit positions
+	if !lps.IsValid() {
+		log.Info.Println("These positions are unreachale, fit it.")
+		lps.Fit()
+	}
+	// Move legs
+	err := hexabody.MoveLegs(lps, 2000)
+	if err != nil {	
+		log.Info.Println(err)
+	} else {
+		log.Info.Println("Movement complete")
+	}	
+}
+
 func (d *HeadPatrolSkill) OnStart() {
 	hexabody.Start()
 	distance.Start()
@@ -94,14 +124,17 @@ func (d *HeadPatrolSkill) OnConnect() {
 				d.currentScanRotation = d.currentScanRotation * -1
 			}
 			dist, _ := distance.Value()
-			//		log.Info.Println("Distance in mm: ", dist, " :: ", err)
+//			log.Info.Println("Distance in mm: ", dist, " :: ", err)
 			if dist < REACTION_DISTANCE {
+				// react to proximity detection
 				hexabody.StopRotatingHeadContinuously()
+				
+				// pause before resuming patrol
 				time.Sleep(REACTION_INTERVAL * time.Millisecond)
 			}
 			var headRatio = d.headScanRange / HEAD_SCAN_SPEED
-			var toleranceInterval time.Duration = 100 * time.Duration(headRatio) //10% of d.headScanRange
-			switch {                                                             // determine ideal check interval within bounds
+			var toleranceInterval time.Duration = 100 * time.Duration(headRatio) // 10% of d.headScanRange
+			switch {  // set check interval within bounds
 			case toleranceInterval > 1000:
 				checkInterval = 1000
 			case toleranceInterval < 100:
@@ -118,7 +151,7 @@ func (d *HeadPatrolSkill) OnConnect() {
 }
 
 func (d *HeadPatrolSkill) OnDisconnect() {
-	hexabody.Relax()
+//	hexabody.Relax()
 }
 
 func (d *HeadPatrolSkill) OnRecvJSON(data []byte) {
@@ -144,6 +177,11 @@ func (d *HeadPatrolSkill) OnRecvJSON(data []byte) {
 		d.isRunning = false
 		hexabody.MoveHead(d.currentWalkDirection, HEAD_ALIGN_SPEED)
 		log.Info.Println("Stopping head scan")
+	case "power":
+		d.isRunning = false
+		hexabody.MoveHead(d.currentWalkDirection, HEAD_ALIGN_SPEED)
+		receivePower()
+		log.Info.Println("Stopping head scan and ready to receive power")
 	default: //nil or invalid
 	}
 
