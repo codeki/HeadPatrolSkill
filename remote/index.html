@@ -47,7 +47,8 @@
   
 .myslider { 
     -webkit-appearance: none; 
-    background: #CFF3FC  ; 
+    background: linear-gradient(90deg, gray 8%, 
+    #CFF3FC 9%, #CFF3FC 91%, gray 92%); 
     width: 50%; 
     height: 20px; 
     opacity: 2; 
@@ -57,7 +58,7 @@
 .myslider::-webkit-slider-thumb { 
     -webkit-appearance: none; 
     cursor: pointer; 
-    background: #34495E  ; 
+    background: #FCF388  ; 
     width: 5%; 
     height: 20px; 
 } 
@@ -68,28 +69,62 @@
 } 
   
 </style> 
-	<body>
-		<button id="start">Start</button>
-		<button id="stop">Stop</button>
-
-		<div class="rangeslider"> 
-		  <input id="slider" class="myslider" type="range" 
-		  	min="0" max="181" value="40"
+<body>
+	<button id="start">Start</button>
+	<button id="stop">Stop</button>
+	<br />Head scan range: <span id="val"></span> 
+	<div class="rangeslider"> 
+		<input id="slider" class="myslider" type="range" 
+		  	min="0" max="190" value="40"
 		  	onmouseup="callfunction()" 
 			ontouchend="callfunction()"> 
-		  <br />Head scan range: <span id="val"></span> 
-		</div> 
-		<p>
-		<button id="power">Power Bow</button>
+	</div> 
+	<canvas id="canvas" width=140 height=140></canvas>
+	<p>
+	<button id="power">Power Bow</button>
 	
-	<script> 
+	<script>
 	var rangeslider = document.getElementById("slider"); 
 	var output = document.getElementById("val"); 
 	output.innerHTML = rangeslider.value; 
-  
+	
+	var canvas = document.getElementById("canvas");
+	var ctx = canvas.getContext("2d");
+	var cx = 70;
+	var cy = 70;
+	var insideRadius = 10;
+	var outsideRadius = 60;
+	var scanRange = 40;
+	drawArc();
+
 	rangeslider.oninput = function() { 
-	  output.innerHTML = this.value; 
+	    var setRange = this.value;
+	    if (setRange > 180) 
+	        setRange = 360;
+	    else if (setRange < 10)
+	        setRange = 0;
+	  output.innerHTML = setRange; 
+	  scanRange = setRange;
+	  drawArc();
 	} 
-	</script> 	
-	</body>
+	
+	function drawArc() {
+    	ctx.clearRect(0,0,canvas.width,canvas.height);
+		var beginningAngle = Math.PI * (1.5 - scanRange/360);
+		var endingAngle = Math.PI * (1.5 + scanRange/360);
+		var x = cx + insideRadius * Math.cos(endingAngle);
+		var y = cy + insideRadius * Math.sin(endingAngle);
+		ctx.strokeStyle = "grey";
+		ctx.fillStyle = "#CFF3FC";
+		ctx.lineWidth = 1;
+		ctx.beginPath();
+		ctx.arc(cx, cy, outsideRadius, beginningAngle, endingAngle);
+		ctx.lineTo(x, y);
+		ctx.arc(cx, cy, insideRadius, endingAngle, beginningAngle, true);
+		ctx.closePath();
+		ctx.fill();
+		ctx.stroke();
+	}
+	</script>
+</body>
 </html>
