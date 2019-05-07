@@ -16,18 +16,16 @@
 						skillID: skillID, 
 						data: {"hsr":val,"run":"start"}
 					})
+					document.getElementById("stop").disabled = false;
+					document.getElementById("start").disabled = true;
 				}
 				document.getElementById("stop").onclick = function() {
 					robot.sendData({
 						skillID: skillID, 
 						data: {"run":"stop"}
 					})
-				}
-				document.getElementById("power").onclick = function() {
-					robot.sendData({
-						skillID: skillID, 
-						data: {"run":"power"}
-					})
+					document.getElementById("start").disabled = false;
+					document.getElementById("stop").disabled = true;
 				}
 				document.getElementById("slider").onmouseup = function() {
 					var val = document.getElementById("slider").value;
@@ -36,6 +34,30 @@
 						data: {"hsr":val}
 					})
 				}
+				document.getElementById("stand").onclick = function() {
+					robot.sendData({
+						skillID: skillID, 
+						data: {"run":"stand"}
+					})
+					document.getElementById("start").disabled = false;
+					document.getElementById("stop").disabled = true;
+				}
+				document.getElementById("sit").onclick = function() {
+					robot.sendData({
+						skillID: skillID, 
+						data: {"run":"sit"}
+					})
+					document.getElementById("start").disabled = false;
+					document.getElementById("stop").disabled = true;
+				}
+				document.getElementById("power").onclick = function() {
+					robot.sendData({
+						skillID: skillID, 
+						data: {"run":"power"}
+					})
+					document.getElementById("start").disabled = false;
+					document.getElementById("stop").disabled = true;
+				}		
 			}});
 		</script>
 	</head>
@@ -70,8 +92,8 @@
   
 </style> 
 <body>
-	<button id="start">Start</button>
-	<button id="stop">Stop</button>
+	<button id="start">Deploy</button>
+	<button id="stop" disabled>Dismiss</button>
 	<br />Head scan range: <span id="val"></span> 
 	<div class="rangeslider"> 
 		<input id="slider" class="myslider" type="range" 
@@ -81,6 +103,8 @@
 	</div> 
 	<canvas id="canvas" width=140 height=140></canvas>
 	<p>
+	<button id="stand">Stand</button>
+	<button id="sit">Sit</button>
 	<button id="power">Power Bow</button>
 	
 	<script>

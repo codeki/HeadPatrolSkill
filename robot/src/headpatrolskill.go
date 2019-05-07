@@ -76,6 +76,7 @@ func powerBow() {
 	var allLegPositions = hexabody.NewLegPositions()
 	allLegPositions.SetLegPosition(0, hexabody.NewLegPosition().SetCoordinates(55, 170, -20))
 	allLegPositions.SetLegPosition(1, hexabody.NewLegPosition().SetCoordinates(-55, 170, -20))
+	legPositionGo(allLegPositions)
 	allLegPositions.SetLegPosition(2, hexabody.NewLegPosition().SetCoordinates(0, 120, 80))
 	allLegPositions.SetLegPosition(3, hexabody.NewLegPosition().SetCoordinates(-30, 60, 130))
 	allLegPositions.SetLegPosition(4, hexabody.NewLegPosition().SetCoordinates(30, 60, 130))
@@ -112,7 +113,7 @@ func (d *HeadPatrolSkill) OnClose() {
 func (d *HeadPatrolSkill) OnConnect() {
 	d.currentWalkDirection = 0.0
 	d.headScanRange = 30.0
-	d.isRunning = true
+	d.isRunning = false
 	d.currentScanRotation = 1
 	hexabody.MoveHead(d.currentWalkDirection, HEAD_ALIGN_SPEED)
 	for {
@@ -143,8 +144,8 @@ func (d *HeadPatrolSkill) OnConnect() {
 				checkInterval = toleranceInterval
 			}
 		} else {
-			hexabody.MoveHead(d.currentWalkDirection, HEAD_ALIGN_SPEED)
 			hexabody.StopRotatingHeadContinuously()
+			hexabody.MoveHead(d.currentWalkDirection, HEAD_ALIGN_SPEED)
 		}
 		time.Sleep(checkInterval * time.Millisecond)
 	}
@@ -170,16 +171,27 @@ func (d *HeadPatrolSkill) OnRecvJSON(data []byte) {
 
 	switch run {
 	case "start":
+		hexabody.Stand()
 		hexabody.MoveHead(d.currentWalkDirection, HEAD_ALIGN_SPEED)
 		d.isRunning = true
 		log.Info.Println("Starting head scan")
 	case "stop":
 		d.isRunning = false
-		hexabody.MoveHead(d.currentWalkDirection, HEAD_ALIGN_SPEED)
+		hexabody.RelaxHead()
 		log.Info.Println("Stopping head scan")
+	case "stand":
+		d.isRunning = false
+		hexabody.RelaxHead()
+		hexabody.Stand()
+		log.Info.Println("Stopping head scan and standing by")
+	case "sit":
+		d.isRunning = false
+		hexabody.RelaxHead()
+		hexabody.RelaxLegs()
+		log.Info.Println("Stopping head scan and resting")
 	case "power":
 		d.isRunning = false
-		hexabody.MoveHead(d.currentWalkDirection, HEAD_ALIGN_SPEED)
+		hexabody.RelaxHead()
 		powerBow()
 		log.Info.Println("Stopping head scan and ready to receive power")
 	default: //nil or invalid
@@ -190,7 +202,6 @@ func (d *HeadPatrolSkill) OnRecvJSON(data []byte) {
 		d.headScanRange = hsr
 		log.Info.Println("Changing head scan range to ", hsr)
 	case hsr < 10:
-		hexabody.MoveHead(d.currentWalkDirection, HEAD_ALIGN_SPEED)
 		d.headScanRange = hsr
 		log.Info.Println("Staring straight ahead")
 	case hsr > 180:
