@@ -50,10 +50,18 @@
 					document.getElementById("start").disabled = false;
 					document.getElementById("stop").disabled = true;
 				}
-				document.getElementById("power").onclick = function() {
+				document.getElementById("powerbow").onclick = function() {
 					robot.sendData({
 						skillID: skillID, 
-						data: {"run":"power"}
+						data: {"run":"powerbow"}
+					})
+					document.getElementById("start").disabled = false;
+					document.getElementById("stop").disabled = true;
+				}		
+				document.getElementById("powerwave").onclick = function() {
+					robot.sendData({
+						skillID: skillID, 
+						data: {"run":"powerwave"}
 					})
 					document.getElementById("start").disabled = false;
 					document.getElementById("stop").disabled = true;
@@ -105,7 +113,8 @@
 	<p>
 	<button id="stand">Stand</button>
 	<button id="sit">Sit</button>
-	<button id="power">Power Bow</button>
+	<button id="powerbow">Power Bow</button>
+	<button id="powerwave">Power Wave</button>
 	
 	<script>
 	var rangeslider = document.getElementById("slider"); 

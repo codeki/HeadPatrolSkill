@@ -1,29 +1,34 @@
 package HeadPatrolSkill
 
 import (
+	"mind/core/framework/drivers/accelerometer"
 	"mind/core/framework/drivers/distance"
 	"mind/core/framework/drivers/hexabody"
 	"mind/core/framework/log"
 	"mind/core/framework/skill"
 	"time"
+	"math"
 	"strconv"
 	"encoding/json"
 )
 
 const (
+	APPROACH_SPEED	  = 0.2  // 0.1-1.2cm/s approach to target
 	HEAD_ALIGN_SPEED  = 2000 // ms to make initial head alignment
 	HEAD_SCAN_SPEED   = 20.0 // degress/s (>10 for smooth movement)
 	REACTION_INTERVAL = 2000 // ms frequecy of reaction
-	REACTION_DISTANCE = 200  // mm distance to react to (range: 100-1500)
+	REACTION_DISTANCE = 250  // mm distance to react to (range: 100-1500)
 )
 
 type HeadPatrolSkill struct {
 	skill.Base
 	currentScanRotation hexabody.RotationDirection
 	currentWalkDirection float64
-	isRunning            bool
-//	headScanSpeed		 float64
-	headScanRange		 float64
+	isRunning bool
+//	headScanSpeed float64
+	headScanRange float64
+	powerAx float64
+	powerAy float64
 }
 
 func NewSkill() skill.Interface {
@@ -68,35 +73,138 @@ func changeHeadRotation(headDirection float64, d *HeadPatrolSkill) bool {
 	return changeRotation
 }
 
+func approachTarget(targetDistance float64, d *HeadPatrolSkill) {
+	hexabody.WalkContinuously(hexabody.Direction(), APPROACH_SPEED)
+	time.Sleep(REACTION_INTERVAL * time.Millisecond/2)
+	hexabody.StopWalkingContinuously()
+	d.currentWalkDirection = hexabody.Direction() + 180.0
+	hexabody.WalkContinuously(d.currentWalkDirection, APPROACH_SPEED * 2)
+	time.Sleep(REACTION_INTERVAL * time.Millisecond/2)
+	hexabody.StopWalkingContinuously()				
+}
+
+func powerWave(d *HeadPatrolSkill) {
+	calibrateTilt(d)
+	hexabody.RelaxLegs()
+	
+	// Same as Toe Position (A,R,H) in simulator, except A ranges -90 to 90	
+	var nlp = hexabody.NewLegPositions()
+	for i := 0; i < 6; i++ {
+	    nlp.SetLegPosition(i, hexabody.NewLegPosition().SetCoordinates(55, 170, -20))
+		legPositionGo(nlp, 400)
+	}
+	hexabody.RelaxLegs()
+	checkTilt(d)
+}
+
 func powerBow() {
-	hexabody.RelaxHead()
 	hexabody.Stand()
 
 	// Same as Toe Position (A,R,H) in simulator, except A ranges -90 to 90	
-	var allLegPositions = hexabody.NewLegPositions()
-	allLegPositions.SetLegPosition(0, hexabody.NewLegPosition().SetCoordinates(55, 170, -20))
-	allLegPositions.SetLegPosition(1, hexabody.NewLegPosition().SetCoordinates(-55, 170, -20))
-	legPositionGo(allLegPositions)
-	allLegPositions.SetLegPosition(2, hexabody.NewLegPosition().SetCoordinates(0, 120, 80))
-	allLegPositions.SetLegPosition(3, hexabody.NewLegPosition().SetCoordinates(-30, 60, 130))
-	allLegPositions.SetLegPosition(4, hexabody.NewLegPosition().SetCoordinates(30, 60, 130))
-	allLegPositions.SetLegPosition(5, hexabody.NewLegPosition().SetCoordinates(0, 120, 80))
-	legPositionGo(allLegPositions)
+	var nlp = hexabody.NewLegPositions()
+	nlp.SetLegPosition(0, hexabody.NewLegPosition().SetCoordinates(55, 170, -20))
+	nlp.SetLegPosition(1, hexabody.NewLegPosition().SetCoordinates(-55, 170, -20))
+	legPositionGo(nlp, 2000)
+	nlp.SetLegPosition(2, hexabody.NewLegPosition().SetCoordinates(0, 120, 80))
+	nlp.SetLegPosition(3, hexabody.NewLegPosition().SetCoordinates(-30, 60, 130))
+	nlp.SetLegPosition(4, hexabody.NewLegPosition().SetCoordinates(30, 60, 130))
+	nlp.SetLegPosition(5, hexabody.NewLegPosition().SetCoordinates(0, 120, 80))
+	legPositionGo(nlp, 2000)
 }
 
-func legPositionGo (lps hexabody.LegPositions) {
+func legPositionGo (lps hexabody.LegPositions, legSpeed int) {
 	// Check and fit positions
 	if !lps.IsValid() {
 		log.Info.Println("These positions are unreachale, fit it.")
 		lps.Fit()
 	}
 	// Move legs
-	err := hexabody.MoveLegs(lps, 2000)
+	err := hexabody.MoveLegs(lps, legSpeed)
 	if err != nil {	
 		log.Info.Println(err)
 	} else {
 		log.Info.Println("Movement complete")
 	}	
+}
+
+func calibrateTilt (d *HeadPatrolSkill) {
+	accelerometer.Start()
+	_, _, _, ax, ay, _, _ := accelerometer.Value()
+	accelerometer.Close()
+	d.powerAx = ax
+	d.powerAy = ay
+}
+
+func checkTilt(d *HeadPatrolSkill) {
+	/*
+	* Accelerometer returns acceration (fx, fy, fz) and inclination
+	* (ax, ay, az). The y-direction is left/right (legs 2,5) and x-direction 
+	* is front/back (legs 0/1, 3/4). The z-direction is redundant and
+	* opposite to x. Flat is essentially 0,0 (+/- 1). Positive x
+	* means the front is raised. Positive y means the left is raised.
+	*/
+	accelerometer.Start()
+	_, _, _, ax, ay, _, err := accelerometer.Value()
+	accelerometer.Close()
+	log.Info.Println("Tilt Check: ", ax-d.powerAx, ",", ay-d.powerAy, err)
+
+	if math.Abs(ax-d.powerAx) > 1.5 || math.Abs(ay-d.powerAy) > 1.5 {
+		getFlat(ax, ay, d)
+	} else {
+		log.Info.Println("We are flat!")
+	}
+}
+
+func getFlat(cax float64, cay float64,d *HeadPatrolSkill) {
+	// calibrated x and y inclinations
+	// forward direction (power button) is 0, increasing counterclockwise to 360
+	var tiltRatio float64
+	if cay == 0 { // avoid div by zero
+		tiltRatio = 10 * cax  // maintain sign on cax, which must be > 1 or < -1 here
+	} else {
+		 tiltRatio = cax/cay
+	}
+	var flatDir float64
+	if cax > 0 {
+		switch {
+		case tiltRatio > 10:
+			flatDir = 0
+		case tiltRatio > 1:
+			flatDir =45 - 45*tiltRatio/10
+		case tiltRatio > 0:
+			flatDir = 90 - 45*tiltRatio
+		case tiltRatio < -10:
+			flatDir = 0
+		case tiltRatio < -1:
+			flatDir = 315 - 45*tiltRatio/10
+		case tiltRatio < 0:
+			flatDir = 270 - 45*tiltRatio
+		default:
+		flatDir = 0
+		} 
+	} else {
+		switch {
+		case tiltRatio > 10:
+			flatDir = 180
+		case tiltRatio > 1:
+			flatDir = 225 - 45*tiltRatio/10
+		case tiltRatio > 0:
+			flatDir = 270 - 45*tiltRatio
+		case tiltRatio < -10:
+			flatDir = 180
+		case tiltRatio < -1:
+			flatDir = 135 - 45*tiltRatio/10
+		case tiltRatio < 0:
+			flatDir = 90 - 45*tiltRatio
+		default:
+		flatDir = 0
+		} 
+	}
+	log.Info.Println("Walking direction: ", flatDir)
+	hexabody.WalkContinuously(flatDir, APPROACH_SPEED)
+	time.Sleep(5000 * time.Millisecond)
+	hexabody.StopWalkingContinuously()
+	powerWave(d)
 }
 
 func (d *HeadPatrolSkill) OnStart() {
@@ -129,6 +237,8 @@ func (d *HeadPatrolSkill) OnConnect() {
 			if dist < REACTION_DISTANCE {
 				// react to proximity detection
 				hexabody.StopRotatingHeadContinuously()
+				approachTarget(dist, d)
+
 				
 				// pause before resuming patrol
 				time.Sleep(REACTION_INTERVAL * time.Millisecond)
@@ -189,11 +299,16 @@ func (d *HeadPatrolSkill) OnRecvJSON(data []byte) {
 		hexabody.RelaxHead()
 		hexabody.RelaxLegs()
 		log.Info.Println("Stopping head scan and resting")
-	case "power":
+	case "powerbow":
 		d.isRunning = false
 		hexabody.RelaxHead()
 		powerBow()
 		log.Info.Println("Stopping head scan and ready to receive power")
+	case "powerwave":
+		d.isRunning = false
+		hexabody.RelaxHead()
+		powerWave(d)
+		log.Info.Println("Stopping head scan, sitting and waving for power")
 	default: //nil or invalid
 	}
 
