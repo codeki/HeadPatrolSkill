@@ -158,48 +158,15 @@ func checkTilt(d *HeadPatrolSkill) {
 func getFlat(cax float64, cay float64,d *HeadPatrolSkill) {
 	// calibrated x and y inclinations
 	// forward direction (power button) is 0, increasing counterclockwise to 360
-	var tiltRatio float64
-	if cay == 0 { // avoid div by zero
-		tiltRatio = 10 * cax  // maintain sign on cax, which must be > 1 or < -1 here
-	} else {
-		 tiltRatio = cax/cay
-	}
+
 	var flatDir float64
-	if cax > 0 {
-		switch {
-		case tiltRatio > 10:
-			flatDir = 0
-		case tiltRatio > 1:
-			flatDir =45 - 45*tiltRatio/10
-		case tiltRatio > 0:
-			flatDir = 90 - 45*tiltRatio
-		case tiltRatio < -10:
-			flatDir = 0
-		case tiltRatio < -1:
-			flatDir = 315 - 45*tiltRatio/10
-		case tiltRatio < 0:
-			flatDir = 270 - 45*tiltRatio
-		default:
-		flatDir = 0
-		} 
-	} else {
-		switch {
-		case tiltRatio > 10:
-			flatDir = 180
-		case tiltRatio > 1:
-			flatDir = 225 - 45*tiltRatio/10
-		case tiltRatio > 0:
-			flatDir = 270 - 45*tiltRatio
-		case tiltRatio < -10:
-			flatDir = 180
-		case tiltRatio < -1:
-			flatDir = 135 - 45*tiltRatio/10
-		case tiltRatio < 0:
-			flatDir = 90 - 45*tiltRatio
-		default:
-		flatDir = 0
-		} 
+	var atan2 float64
+	atan2 = math.Atan2(cay, cax) //arc tangent of y/x, ranges -Pi to Pi
+	if atan2 < 0{
+		atan2 = atan2 + 2 * math.Pi // set range to 0 to 2Pi
 	}
+	flatDir = atan2 * 180 / math.Pi	// radians to degree
+
 	log.Info.Println("Walking direction: ", flatDir)
 	hexabody.WalkContinuously(flatDir, APPROACH_SPEED)
 	time.Sleep(5000 * time.Millisecond)
