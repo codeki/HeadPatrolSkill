@@ -84,6 +84,7 @@ func approachTarget(targetDistance float64, d *HeadPatrolSkill) {
 }
 
 func powerWave(d *HeadPatrolSkill) {
+	hexabody.Stand()
 	calibrateTilt(d)
 	hexabody.RelaxLegs()
 	
